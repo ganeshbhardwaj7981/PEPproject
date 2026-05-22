@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: containers/api/Dockerfile
+    image: sandbox-api:${GIT_COMMIT:-latest}
+    container_name: sandbox-api
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      - TEMP_DIR=/tmp/sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # allows API to spawn runner containers
+      - sandbox-temp:/tmp/sandbox
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sandbox-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: sandbox-redis
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sandbox-net
+
+volumes:
+  redis-data:
+  sandbox-temp:
+
+networks:
+  sandbox-net:
+    driver: bridge
